@@ -113,11 +113,20 @@ SPDLOG_INLINE void rotating_file_sink<Mutex>::rotate_() {
         filename_t target = calc_filename(base_filename_, i);
 
         if (!rename_file_(src, target)) {
-            // if failed try again after a small delay.
+            // if failed try again for several attempts after a small delay between each.
             // this is a workaround to a windows issue, where very high rotation
             // rates can cause the rename to fail with permission denied (because of antivirus?).
-            details::os::sleep_for_millis(100);
-            if (!rename_file_(src, target)) {
+            bool success = false;
+            for (auto j = 0; j < 20; j++) {
+                details::os::sleep_for_millis(100);
+                if (rename_file_(src, target)) {
+                    success = true;
+                    break;
+                }
+            }
+
+            // if none of the attempts worked then give up.
+            if (!success) {
                 file_helper_.reopen(
                     true);  // truncate the log file anyway to prevent it to grow beyond its limit!
                 current_size_ = 0;
